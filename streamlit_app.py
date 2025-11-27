@@ -1,119 +1,99 @@
 import streamlit as st
-import time
 import google.generativeai as genai
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 
-# --- Page Config ---
-st.set_page_config(page_title="Chatbot", page_icon="🧠")
+# --- 1. CONFIGURATION ---
+st.set_page_config(page_title="Smart Store AI", page_icon="🤖")
 
-# --- 1. LOAD RETRIEVAL MODEL ---
 @st.cache_resource
-def load_embedding_model():
+def load_models():
     return SentenceTransformer('all-MiniLM-L6-v2')
 
-embedding_model = load_embedding_model()
+embedding_model = load_models()
 
-# --- Session State ---
-if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {"role": "assistant", "content": "Hello! I am a Chatbot. Ask me anything about the store!"}
-    ]
-
+# --- 2. DATA (Your Knowledge Base) ---
 if "knowledge_base" not in st.session_state:
     st.session_state.knowledge_base = [
-        {"id": 1, "topic": "Shipping", "content": "We ship all domestic orders via FedEx. Delivery takes 3-5 business days."},
-        {"id": 2, "topic": "Returns", "content": "You can return items within 30 days of purchase if they are unused."},
-        {"id": 3, "topic": "Payment", "content": "We accept Visa, Mastercard, PayPal, and Apple Pay."},
-        {"id": 4, "topic": "Contact", "content": "Email us at support@mystore.com."},
-        {"id": 5, "topic": "Hours", "content": "We are open Mon-Fri from 9 AM to 5 PM EST."}
+        {"id": 1, "content": "We ship all domestic orders via FedEx. Delivery takes 3-5 business days."},
+        {"id": 2, "content": "Returns are accepted within 30 days of purchase if they are unused."},
+        {"id": 3, "content": "We accept Visa, Mastercard, PayPal, and Apple Pay."},
+        {"id": 4, "content": "Support email: help@mystore.com. Phone: 1-800-555-0199."},
+        {"id": 5, "content": "Our store is open Mon-Fri from 9 AM to 5 PM EST."}
     ]
 
-# --- 2. VECTORIZATION ---
-def update_embeddings():
-    corpus = [doc['content'] for doc in st.session_state.knowledge_base]
-    embeddings = embedding_model.encode(corpus)
-    return embeddings, corpus
+# --- 3. VECTORIZATION (Retrieval) ---
+def get_best_match(query):
+    corpus = [d['content'] for d in st.session_state.knowledge_base]
+    corpus_embeddings = embedding_model.encode(corpus)
+    query_embedding = embedding_model.encode([query])
+    
+    scores = cosine_similarity(query_embedding, corpus_embeddings)[0]
+    best_idx = np.argmax(scores)
+    return corpus[best_idx], scores[best_idx]
 
-if "doc_embeddings" not in st.session_state:
-    embeddings, corpus = update_embeddings()
-    st.session_state.doc_embeddings = embeddings
-    st.session_state.corpus = corpus
-
-# --- 3. GENERATION (The LLM Engine) ---
-def generate_with_gemini(context, query):
+# --- 4. GENERATION (The Brain) ---
+def generate_answer(query):
     try:
-        # --- HARDCODED KEY FIX ---
-        # We are putting the key directly here to bypass sidebar issues
+        # Use the Secret Key from Streamlit Cloud
         my_key = st.secrets["GEMINI_KEY"]
+        
         genai.configure(api_key=my_key)
+        model = genai.GenerativeModel('models/gemini-1.5-flash')
+
+        # A. Retrieve Context
+        best_text, score = get_best_match(query)
         
-        model = genai.GenerativeModel('models/gemini-2.5-flash') 
-        
-        prompt = f"""
-        You are a helpful customer support agent.
-        Use the following Context to answer the User's Question.
-        If the answer is not in the Context, say "I don't know".
-        
-        Context:
-        {context}
-        
-        User's Question:
-        {query}
-        
-        Answer (be polite and concise):
-        """
-        
+        # B. Build History (Memory of last 5 messages)
+        history_text = ""
+        for msg in st.session_state.messages[-5:]:
+            history_text += f"{msg['role']}: {msg['content']}\n"
+
+        # C. Decision Logic (Smart Router)
+        if score > 0.35:
+            # High match? Use Database
+            prompt = f"""
+            You are a helpful store assistant.
+            Use the CONTEXT and HISTORY to answer.
+            
+            CONTEXT: {best_text}
+            HISTORY: {history_text}
+            USER QUESTION: {query}
+            """
+        else:
+            # Low match? Just Chit-Chat
+            prompt = f"""
+            You are a friendly customer service AI. 
+            The user is saying hello or asking a general question.
+            Be polite and helpful. Do NOT make up store info.
+            
+            HISTORY: {history_text}
+            USER SAID: {query}
+            """
+
         response = model.generate_content(prompt)
         return response.text
+
     except Exception as e:
-        return f"Error generating response: {str(e)}"
+        return f"Error: {str(e)}"
 
-# --- MAIN LOGIC ---
-def run_rag_pipeline(query):
-    # STEP A: RETRIEVAL
-    query_embedding = embedding_model.encode([query])
-    similarities = cosine_similarity(query_embedding, st.session_state.doc_embeddings)
-    best_idx = np.argmax(similarities)
-    best_score = similarities[0][best_idx]
-    
-    if best_score < 0.3:
-        return "I'm sorry, I don't have information on that in my database."
-    
-    found_doc = st.session_state.corpus[best_idx]
-    
-    # STEP B: GENERATION (Always runs now)
-    return generate_with_gemini(found_doc, query)
+# --- 5. UI (Chat Window) ---
+st.title("🤖 Smart Assistant")
 
-
-# --- UI: Sidebar ---
-with st.sidebar:
-    st.header("🧠 Teach the Bot")
-    with st.form("train_form"):
-        new_topic = st.text_input("Topic")
-        new_content = st.text_area("Fact")
-        if st.form_submit_button("Add to Brain"):
-            st.session_state.knowledge_base.append({"id": len(st.session_state.knowledge_base), "topic": new_topic, "content": new_content})
-            embeddings, corpus = update_embeddings()
-            st.session_state.doc_embeddings = embeddings
-            st.session_state.corpus = corpus
-            st.success("Memory Updated!")
-
-# --- UI: Chat Interface ---
-st.title("🧠 Full RAG Chatbot")
+if "messages" not in st.session_state:
+    st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I help you?"}]
 
 for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+    st.chat_message(msg["role"]).write(msg["content"])
 
 if prompt := st.chat_input("Ask me..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    st.chat_message("user").write(prompt)
 
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            response = run_rag_pipeline(prompt)
-            st.markdown(response)
+            response = generate_answer(prompt)
+            st.write(response)
+            
     st.session_state.messages.append({"role": "assistant", "content": response})
