@@ -26,6 +26,7 @@ if "knowledge_base" not in st.session_state:
 # --- 3. VECTORIZATION (Retrieval) ---
 def get_best_match(query):
     corpus = [d['content'] for d in st.session_state.knowledge_base]
+    # Re-encode corpus each time to catch new sidebar additions
     corpus_embeddings = embedding_model.encode(corpus)
     query_embedding = embedding_model.encode([query])
     
@@ -36,11 +37,19 @@ def get_best_match(query):
 # --- 4. GENERATION (The Brain) ---
 def generate_answer(query):
     try:
-        # Use the Secret Key from Streamlit Cloud
-        my_key = st.secrets["GEMINI_KEY"]
+        # --- HYBRID KEY LOGIC ---
+        # 1. Try to get key from Cloud Secrets (Works on Streamlit Cloud)
+        try:
+            my_key = st.secrets["GEMINI_KEY"]
+        except:
+            # 2. If running locally (Your Computer), use this Backup Key
+            # 👇👇👇 PASTE YOUR NEW KEY BELOW INSIDE THE QUOTES 👇👇👇
+            my_key = "AIzaSyAG_ezUX44lgpqAiuaJ_icy4s_cfiM3o9c"
         
         genai.configure(api_key=my_key)
-        model = genai.GenerativeModel('models/gemini-1.5-flash')
+        
+        # Using 2.5-flash as requested
+        model = genai.GenerativeModel('models/gemini-2.5-flash')
 
         # A. Retrieve Context
         best_text, score = get_best_match(query)
@@ -78,7 +87,23 @@ def generate_answer(query):
     except Exception as e:
         return f"Error: {str(e)}"
 
-# --- 5. UI (Chat Window) ---
+# --- 5. UI (Sidebar & Chat) ---
+
+# Sidebar for Training
+with st.sidebar:
+    st.header("🧠 Teach the Bot")
+    with st.form("train_form"):
+        new_topic = st.text_input("Topic (Optional)")
+        new_content = st.text_area("Fact (e.g. 'We sell red shoes')")
+        if st.form_submit_button("Add to Brain"):
+            if new_content:
+                st.session_state.knowledge_base.append({
+                    "id": len(st.session_state.knowledge_base) + 1, 
+                    "content": new_content
+                })
+                st.success("Memory Updated!")
+
+# Main Chat Window
 st.title("🤖 Smart Assistant")
 
 if "messages" not in st.session_state:
