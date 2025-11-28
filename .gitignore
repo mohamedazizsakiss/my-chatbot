@@ -1,0 +1,9 @@
+Ignore secret files
+
+.streamlit/secrets.toml
+.env
+
+Ignore system files
+
+pycache/
+*.pyc
