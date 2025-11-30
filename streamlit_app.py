@@ -7,7 +7,8 @@ import requests
 st.set_page_config(page_title="Store Support", page_icon="🛍️")
 
 DOLIBARR_API_KEY = "kZbDKDivuFZQAAz"
-DOLIBARR_API_URL = "http://localhost/dolibarr/htdocs/api/index.php" 
+# Replace the old localhost link with your new ngrok link
+DOLIBARR_API_URL = "https://1a2b-3c4d.ngrok-free.app/dolibarr/htdocs/api/index.php"
 
 # --- 2. KNOWLEDGE BASE ---
 if "knowledge_base" not in st.session_state:
