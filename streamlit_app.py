@@ -7,7 +7,7 @@ import requests
 st.set_page_config(page_title="Store Support", page_icon="🛍️")
 
 DOLIBARR_API_KEY = "kZbDKDivuFZQAAz"
-# 👇 YOUR NEW NGROK LINK IS HERE 👇
+# Your correct ngrok link
 DOLIBARR_API_URL = "https://unplacatory-jenine-unrasped.ngrok-free.dev/dolibarr/htdocs/api/index.php"
 
 # --- 2. KNOWLEDGE BASE ---
@@ -43,14 +43,15 @@ def extract_product_name_with_ai(user_query):
     except:
         return user_query 
 
-# --- 4. DOLIBARR TOOL ---
+# --- 4. DOLIBARR TOOL (Safe Search) ---
 def check_dolibarr_stock(product_keyword):
     headers = {"DOLAPIKEY": DOLIBARR_API_KEY}
     clean_keyword = product_keyword.replace('"', '').replace("'", "").strip()
     
-    # Safe Search Filter
-    sql = f"(t.ref:like:'%{clean_keyword}%') | (t.label:like:'%{clean_keyword}%')"
-    params = {"sqlfilters": sql, "limit": 10}
+    # 👇 SAFE FILTER: Simple Label search to avoid Error 400
+    # We removed the OR logic and parentheses
+    sql = f"t.label:like:'%{clean_keyword}%'"
+    params = {"sqlfilters": sql, "limit": 5}
     
     try:
         response = requests.get(f"{DOLIBARR_API_URL}/products", headers=headers, params=params)
@@ -63,14 +64,13 @@ def check_dolibarr_stock(product_keyword):
                     result_text += f"- {p['label']} (Ref: {p['ref']}) | Stock: {p['stock_reel']} | Price: {p['price']}\n"
                 return result_text
             else:
-                return f"I searched Dolibarr for '{clean_keyword}' but found 0 results."
+                return f"I searched for '{clean_keyword}' and found 0 results."
         else:
-            return f"API Error: {response.status_code}"
+            return f"API Error: {response.status_code} (Dolibarr rejected the query)"
     except Exception as e:
         return f"Connection Error: {str(e)}"
 
 # --- 5. VECTORIZATION (CLOUD VERSION) ---
-# Uses Google Cloud for math to prevent crashing the server
 def get_best_match(query):
     try:
         try:
