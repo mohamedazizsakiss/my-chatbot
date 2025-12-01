@@ -15,7 +15,7 @@ if "knowledge_base" not in st.session_state:
     st.session_state.knowledge_base = [
         {"id": 1, "content": "We ship all domestic orders via FedEx. Delivery takes 3-5 business days."},
         {"id": 2, "content": "Returns are accepted within 30 days of purchase if they are unused."},
-        {"id": 3, "content": "We accept Visa, Mastercard, PayPal, and Apple Pay."},
+        {"id": 3, "content": "We accept Visa, Mastercard, PayPal, d17, and Apple Pay."},
         {"id": 4, "content": "Support email: help@mystore.com. Phone: 1-800-555-0199."},
         {"id": 5, "content": "Our store is open Mon-Fri from 9 AM to 5 PM EST."}
     ]
@@ -137,10 +137,10 @@ def generate_answer(query):
         return f"Error: {str(e)}"
 
 # --- 7. UI ---
-st.title("🏭 Ultimate AI Agent")
+st.title("🛍️ AI support")
 
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "Hello! I can check stock. Try 'Check stock for Jacket'."}]
+    st.session_state.messages = [{"role": "assistant", "content": "Hello! how can I help you today."}]
 
 for msg in st.session_state.messages:
     st.chat_message(msg["role"]).write(msg["content"])
