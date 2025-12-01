@@ -1,15 +1,22 @@
 import streamlit as st
 import google.generativeai as genai
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 import requests
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Store Support", page_icon="🛍️")
 
-# 👇👇👇 CONFIGURATION 👇👇👇
+# 👇 UPDATED: Using your Ngrok Tunnel (Visible to Cloud)
 DOLIBARR_API_KEY = "kZbDKDivuFZQAAz"
 DOLIBARR_API_URL = "https://unplacatory-jenine-unrasped.ngrok-free.dev/dolibarr/htdocs/api/index.php"
-# 👆👆👆👆👆👆👆👆👆👆👆👆
+
+@st.cache_resource
+def load_models():
+    return SentenceTransformer('all-MiniLM-L6-v2')
+
+embedding_model = load_models()
 
 # --- 2. KNOWLEDGE BASE ---
 if "knowledge_base" not in st.session_state:
@@ -27,7 +34,7 @@ def extract_product_name_with_ai(user_query):
         try:
             my_key = st.secrets["GEMINI_KEY"]
         except:
-            my_key = "AIzaSy..." 
+            my_key = "AIzaSy..." # Fallback for local testing
             
         genai.configure(api_key=my_key)
         model = genai.GenerativeModel('models/gemini-2.5-flash')
@@ -37,22 +44,24 @@ def extract_product_name_with_ai(user_query):
         Rules:
         1. Remove adjectives like "cool", "nice", "my", "the", "this", "on stock".
         2. Return ONLY the product name.
+        3. Do NOT fix spelling errors (e.g. keep "pontalong" as is).
+        
         User sentence: "{user_query}"
         """
         response = model.generate_content(prompt)
         clean_name = response.text.strip()
-        st.toast(f"🤖 Extracted: '{clean_name}'")
+        st.toast(f"🔍 AI is searching for: '{clean_name}'")
         return clean_name
     except:
         return user_query 
 
-# --- 4. DOLIBARR TOOL (Safe Search) ---
+# --- 4. DOLIBARR TOOL (Robust Search) ---
 def check_dolibarr_stock(product_keyword):
     headers = {"DOLAPIKEY": DOLIBARR_API_KEY}
     clean_keyword = product_keyword.replace('"', '').replace("'", "").strip()
     
-    # 👇 SAFE FILTER: Simple Label search to avoid Error 400
-    sql = f"t.label:like:'%{clean_keyword}%'"
+    # Search Label OR Ref
+    sql = f"(t.label:like:'%{clean_keyword}%') OR (t.ref:like:'%{clean_keyword}%')"
     params = {"sqlfilters": sql, "limit": 5}
     
     try:
@@ -72,42 +81,14 @@ def check_dolibarr_stock(product_keyword):
     except Exception as e:
         return f"Connection Error: {str(e)}"
 
-# --- 5. VECTORIZATION (CLOUD VERSION) ---
+# --- 5. VECTORIZATION ---
 def get_best_match(query):
-    try:
-        try:
-            my_key = st.secrets["GEMINI_KEY"]
-        except:
-            my_key = "AIzaSy..."
-        
-        genai.configure(api_key=my_key)
-        
-        # Use Google for math instead of local CPU (Prevents crashing)
-        docs = [d['content'] for d in st.session_state.knowledge_base]
-        doc_vectors = genai.embed_content(
-            model="models/text-embedding-004",
-            content=docs,
-            task_type="retrieval_document"
-        )['embedding']
-
-        query_vector = genai.embed_content(
-            model="models/text-embedding-004",
-            content=query,
-            task_type="retrieval_query"
-        )['embedding']
-
-        # Dot product similarity
-        scores = []
-        for doc_vec in doc_vectors:
-            score = np.dot(query_vector, doc_vec)
-            scores.append(score)
-            
-        best_idx = np.argmax(scores)
-        return docs[best_idx], scores[best_idx]
-        
-    except Exception as e:
-        # Fallback if embeddings fail
-        return st.session_state.knowledge_base[0]['content'], 0.0
+    corpus = [d['content'] for d in st.session_state.knowledge_base]
+    corpus_embeddings = embedding_model.encode(corpus)
+    query_embedding = embedding_model.encode([query])
+    scores = cosine_similarity(query_embedding, corpus_embeddings)[0]
+    best_idx = np.argmax(scores)
+    return corpus[best_idx], scores[best_idx]
 
 # --- 6. GENERATION ---
 def generate_answer(query):
@@ -134,8 +115,7 @@ def generate_answer(query):
             """
         else:
             best_text, score = get_best_match(query)
-            # Threshold for cloud embeddings
-            if score > 0.6:
+            if score > 0.35:
                 prompt = f"Context: {best_text}\nQuestion: {query}\nAnswer politely."
             else:
                 prompt = f"Chat History: ...\nUser said: {query}\nReply politely."
@@ -160,7 +140,7 @@ if prompt := st.chat_input("Ask me..."):
     st.chat_message("user").write(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("Checking..."):
+        with st.spinner("Checking database..."):
             response = generate_answer(prompt)
             st.write(response)
             
