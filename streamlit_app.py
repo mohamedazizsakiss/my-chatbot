@@ -7,9 +7,8 @@ import requests
 st.set_page_config(page_title="Store Support", page_icon="🛍️")
 
 DOLIBARR_API_KEY = "kZbDKDivuFZQAAz"
-# Your correct ngrok link
-DOLIBARR_API_URL = "https://unplacatory-jenine-unrasped.ngrok-free.dev/dolibarr/htdocs/api/index.php"
-
+#  ngrok link
+DOLIBARR_API_URL = "https://unplacatory-jenine-unrasped.ngrok-free.dev/api/index.php"
 # --- 2. KNOWLEDGE BASE ---
 if "knowledge_base" not in st.session_state:
     st.session_state.knowledge_base = [
@@ -137,7 +136,7 @@ def generate_answer(query):
         return f"Error: {str(e)}"
 
 # --- 7. UI ---
-st.title("🛍️ AI support")
+st.title("🛍️ ELEGANCIA support")
 
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "Hello! how can I help you today."}]
