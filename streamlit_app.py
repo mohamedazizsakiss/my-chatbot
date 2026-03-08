@@ -8,7 +8,7 @@ st.set_page_config(page_title="Store Support", page_icon="🛍️")
 
 DOLIBARR_API_KEY = "kZbDKDivuFZQAAz"
 #  ngrok link
-DOLIBARR_API_URL = "https://unplacatory-jenine-unrasped.ngrok-free.dev/api/index.php"
+DOLIBARR_API_URL = "https://unplacatory-jenine-unrasped.ngrok-free.dev/dolibarr/htdocs/api/index.php"
 # --- 2. KNOWLEDGE BASE ---
 if "knowledge_base" not in st.session_state:
     st.session_state.knowledge_base = [
